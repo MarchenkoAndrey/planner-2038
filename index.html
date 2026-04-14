@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Planner</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect x='3' y='1' width='10' height='14' rx='1.5' fill='%234a90d9' stroke='%232c6db5' stroke-width='.8'/><line x1='5.5' y1='4.5' x2='10.5' y2='4.5' stroke='%23fff' stroke-width='1' stroke-linecap='round'/><line x1='5.5' y1='6.5' x2='10.5' y2='6.5' stroke='%23fff' stroke-width='1' stroke-linecap='round'/><line x1='5.5' y1='8.5' x2='10.5' y2='8.5' stroke='%23fff' stroke-width='1' stroke-linecap='round'/><line x1='5.5' y1='10.5' x2='8' y2='10.5' stroke='%23fff' stroke-width='1' stroke-linecap='round'/><rect x='3' y='1' width='1.5' height='14' rx='.75' fill='%232c6db5'/></svg>">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #f0f2f5;
+    color: #1a1a2e;
+    padding: 24px;
+    min-height: 100vh;
+  }
+
+  h1 { font-size: 22px; margin-bottom: 8px; font-weight: 700; }
+  .subtitle { font-size: 13px; color: #666; margin-bottom: 24px; }
+
+  .controls {
+    display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap;
+  }
+  .controls button {
+    padding: 6px 14px; border: 1px solid #d0d5dd; background: #fff;
+    border-radius: 6px; font-size: 13px; cursor: pointer; transition: all .15s;
+  }
+  .controls button:hover { background: #f5f5f5; }
+  .controls button.active { background: #1a1a2e; color: #fff; border-color: #1a1a2e; }
+
+  .board {
+    display: flex;
+    gap: 16px;
+    align-items: start;
+    overflow-x: auto;
+    padding-bottom: 12px;
+  }
+  .board::-webkit-scrollbar { height: 6px; }
+  .board::-webkit-scrollbar-track { background: transparent; }
+  .board::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+  .cluster {
+    flex: 0 0 215px;
+    background: #fff; border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08); overflow: hidden; min-height: 60px;
+  }
+  .cluster-header {
+    padding: 12px 16px; font-weight: 600; font-size: 14px;
+    display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #eee;
+  }
+  .cluster-name {
+    cursor: text;
+    border-radius: 3px;
+    padding: 1px 4px;
+    margin: -1px -4px;
+    transition: background .15s;
+  }
+  .cluster-name:hover { background: #f0f2f5; }
+
+  .cluster-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; cursor: pointer; }
+  .task-count { margin-left: auto; font-size: 12px; color: #999; font-weight: 400; }
+
+  .task-list { padding: 8px; min-height: 30px; transition: background .2s; }
+  .task-list.drag-over { background: #f0f7ff; border-radius: 6px; }
+
+  .task {
+    padding: 10px 12px 10px 28px; border-radius: 6px; margin-bottom: 4px;
+    font-size: 13px; line-height: 1.45; cursor: grab;
+    background: #fafbfc; border: 1px solid transparent; transition: all .15s;
+    position: relative; user-select: none;
+  }
+  .task:hover { background: #f0f2f5; border-color: #e0e3e8; }
+  .task.dragging { opacity: .4; }
+  .task.priority-urgent { border-left: 3px solid #e74c3c; background: #fff5f5; }
+  .task.priority-important { border-left: 3px solid #27ae60; background: #eafff3; }
+
+  .drag-handle {
+    position: absolute; left: 6px; top: 50%; transform: translateY(-50%);
+    width: 16px; display: flex; align-items: center; justify-content: center;
+    color: #ccc; font-size: 14px; cursor: grab;
+  }
+  .task:hover .drag-handle { color: #999; }
+
+  .task .task-actions {
+    position: absolute; top: 6px; right: 6px; display: none; gap: 2px;
+  }
+  .task:hover .task-actions { display: flex; }
+
+  .task-actions button {
+    width: 22px; height: 22px; border: none; background: transparent;
+    cursor: pointer; border-radius: 4px; font-size: 12px;
+    display: flex; align-items: center; justify-content: center; color: #888;
+  }
+  .task-actions button:hover { background: #e0e3e8; color: #333; }
+  .task-actions button.urgent-btn.active { background: #e74c3c; color: #fff; }
+  .task-actions button.important-btn.active { background: #27ae60; color: #fff; }
+
+  .task-meta { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; margin-left: 0px; align-items: center; }
+
+  .badge { font-size: 11px; padding: 2px 7px; border-radius: 4px; font-weight: 500; display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+  .badge.urgent { background: #fde8e8; color: #c0392b; }
+  .badge.waiting { background: #fef9e7; color: #b7950b; }
+  .badge.deadline { background: #e8f4fd; color: #2980b9; }
+
+  .note-indicator {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    background: #e8f4fd;
+    color: #2980b9;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+
+  .add-task-row { padding: 4px 8px 8px; }
+  .add-task-row input {
+    width: 100%; padding: 7px 10px; border: 1px dashed #d0d5dd;
+    border-radius: 6px; font-size: 13px; background: transparent;
+    outline: none; transition: border-color .2s;
+  }
+  .add-task-row input:focus { border-color: #999; border-style: solid; }
+
+  .empty-hint { padding: 16px; text-align: center; color: #ccc; font-size: 13px; }
+
+  .done-section {
+    margin-top: 40px;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    overflow: hidden;
+  }
+  .done-header {
+    padding: 12px 16px;
+    font-weight: 600;
+    font-size: 14px;
+    color: #999;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+    user-select: none;
+  }
+  .done-header:hover { background: #fafbfc; }
+  .done-header .arrow { transition: transform .2s; }
+  .done-header .arrow.collapsed { transform: rotate(-90deg); }
+  .done-count { margin-left: auto; font-size: 12px; color: #bbb; }
+  .done-list { padding: 8px; }
+  .done-list.collapsed { display: none; }
+
+  .done-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin-bottom: 2px;
+    font-size: 13px;
+    color: #999;
+    transition: background .15s;
+  }
+  .done-item:hover { background: #fafbfc; }
+
+  .done-item .done-cluster {
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .done-item .done-date {
+    font-size: 11px;
+    color: #bbb;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-left: auto;
+    text-decoration: none;
+  }
+
+  .done-item .done-undo {
+    border: none; background: none; cursor: pointer; font-size: 12px;
+    color: #ccc; flex-shrink: 0; padding: 2px 4px; border-radius: 3px;
+    transition: all .15s;
+  }
+  .done-item .done-undo:hover { color: #333; background: #e0e3e8; }
+
+  .done-item .done-text { flex: 1; }
+  .done-item .done-text.done { text-decoration: line-through; }
+
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.35); z-index: 100;
+    align-items: center; justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: #fff; border-radius: 12px; padding: 24px;
+    width: 960px; max-width: 95vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,.2);
+  }
+  .modal h3 { font-size: 16px; margin-bottom: 16px; }
+  .modal-body { display: flex; gap: 20px; }
+  .modal-body .main-col { flex: 1; min-width: 0; }
+  .modal-body .side-col { width: 200px; flex-shrink: 0; }
+  .modal label { display: block; font-size: 13px; margin-bottom: 4px; color: #555; }
+  .modal input, .modal select {
+    width: 100%; padding: 8px 10px; border: 1px solid #d0d5dd;
+    border-radius: 6px; font-size: 13px; margin-bottom: 12px;
+    box-sizing: border-box;
+  }
+  .modal textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid #d0d5dd;
+    border-radius: 6px; font-size: 13px; margin-bottom: 12px;
+    font-family: inherit; resize: vertical; line-height: 1.5;
+    outline: none; transition: border-color .2s; box-sizing: border-box;
+  }
+  .modal textarea:focus { border-color: #999; }
+
+  .notes-toolbar {
+    display: flex; gap: 4px; margin-bottom: 4px;
+  }
+  .notes-toolbar button {
+    width: 28px; height: 28px; border: 1px solid #d0d5dd; background: #fff;
+    border-radius: 4px; cursor: pointer; font-size: 13px; display: flex;
+    align-items: center; justify-content: center; color: #555;
+  }
+  .notes-toolbar button:hover { background: #f0f2f5; color: #1a1a2e; }
+  .notes-toolbar button.active { background: #1a1a2e; color: #fff; border-color: #1a1a2e; }
+
+  .notes-editor {
+    width: 100%; min-height: 200px; padding: 8px 10px; border: 1px solid #d0d5dd;
+    border-radius: 6px; font-size: 13px; line-height: 1.5;
+    outline: none; transition: border-color .2s; overflow-y: auto;
+    max-height: 400px; box-sizing: border-box;
+  }
+  .notes-editor:focus { border-color: #999; }
+  .notes-editor:empty::before {
+    content: attr(data-placeholder); color: #aaa; pointer-events: none;
+  }
+  .notes-editor ul, .notes-editor ol { margin: 4px 0 4px 20px; }
+  .notes-editor li { margin-bottom: 2px; }
+
+  .modal .btn-row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+  .modal .btn-row button {
+    padding: 8px 20px; border: none; border-radius: 6px;
+    font-size: 13px; cursor: pointer;
+  }
+  .btn-primary { background: #1a1a2e; color: #fff; }
+  .btn-secondary { background: #f0f2f5; color: #333; }
+
+  .color-picker {
+    display: flex; gap: 6px; margin-bottom: 12px;
+  }
+  .color-swatch {
+    width: 24px; height: 24px; border-radius: 50%; border: 2px solid transparent;
+    cursor: pointer; transition: all .15s;
+  }
+  .color-swatch:hover { transform: scale(1.15); }
+  .color-swatch.selected { border-color: #1a1a2e; box-shadow: 0 0 0 2px #fff, 0 0 0 4px #1a1a2e; }
+
+  .rename-input {
+    font-size: 14px; font-weight: 600;
+    padding: 2px 6px; border: 1px solid #999; border-radius: 4px;
+    outline: none; background: #fff;
+  }
+
+  /* ===== PIN SCREEN ===== */
+  .pin-overlay {
+    position: fixed; inset: 0; background: #f0f2f5;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 9999;
+  }
+  .pin-box {
+    background: #fff; border-radius: 16px; padding: 32px 40px;
+    box-shadow: 0 8px 32px rgba(0,0,0,.12); text-align: center;
+    max-width: 320px; width: 90vw;
+  }
+  .pin-digits { display: flex; gap: 8px; justify-content: center; margin-bottom: 16px; }
+  .pin-digit {
+    width: 44px; height: 44px; border-radius: 8px;
+    border: 2px solid #d0d5dd; background: #fafbfc;
+    font-size: 20px; font-weight: 700; text-align: center;
+    color: #1a1a2e; outline: none; transition: border-color .2s;
+  }
+  .pin-digit:focus { border-color: #4a90d9; background: #f0f7ff; }
+  .pin-digit.filled { background: #e8f4fd; border-color: #2980b9; }
+  .pin-error { color: #e74c3c; font-size: 12px; min-height: 16px; }
+  .pin-hint { color: #666; font-size: 13px; }
+
+  /* ===== MOBILE ===== */
+  @media (max-width: 768px) {
+    body { padding: 12px; }
+    h1 { font-size: 18px; }
+    .subtitle { font-size: 12px; }
+
+    .pin-box { padding: 24px 20px; }
+    .pin-digit { width: 48px; height: 48px; font-size: 22px; }
+
+    .controls { gap: 6px; }
+    .controls button { padding: 5px 10px; font-size: 12px; }
+
+    .board {
+      flex-direction: column;
+      overflow-x: visible;
+    }
+    .cluster {
+      flex: 0 0 auto;
+      width: 100%;
+    }
+    .task-list { padding: 6px; }
+    .task { padding: 12px 14px 12px 32px; font-size: 14px; }
+    .task-actions { display: flex !important; }
+    .task-actions button { width: 28px; height: 28px; font-size: 14px; }
+    .task-actions .important-btn, .task-actions .urgent-btn { width: 24px; }
+    .drag-handle { display: none; }
+
+    .modal { padding: 16px; max-width: 100vw; width: 100vw; height: 100vh; max-height: 100vh; border-radius: 0; }
+    .modal-body { flex-direction: column; }
+    .modal-body .side-col { width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app-content" style="display:none;">
+<h1>Planner</h1>
+<div class="subtitle">Двойной клик — редактирование. Перетаскивай задачи между колонками и внутри них.</div>
+
+<div class="controls">
+  <button id="btn-all" class="active" onclick="showView('all')">Все</button>
+  <button id="btn-week" onclick="showView('week')">Эта неделя</button>
+  <button id="btn-urgent" onclick="showView('urgent')">🔴 Срочно</button>
+  <button id="btn-important" onclick="showView('important')">🟢 Важно</button>
+  <button id="btn-waiting" onclick="showView('waiting')">⏳ Ждём</button>
+  <button onclick="exportData()">💾 Экспорт JSON</button>
+  <button onclick="backupFullHtml()">📦 Полный бэкап (HTML)</button>
+</div>
+
+<div id="loading" style="text-align:center;padding:40px;color:#999;">
+  <div>Загрузка…</div>
+  <div id="load-status" style="margin-top:12px;font-size:12px;color:#ccc;"></div>
+  <div id="load-error" style="margin-top:12px;font-size:13px;color:#e74c3c;display:none;"></div>
+</div>
+<div class="board" id="board" style="display:none;"></div>
+
+<div class="done-section" id="done-section" style="display:none;">
+  <div class="done-header" onclick="toggleDoneCollapse()">
+    <span class="arrow" id="done-arrow">▼</span>
+    Завершённые
+    <span class="done-count" id="done-count"></span>
+  </div>
+  <div class="done-list" id="done-list"></div>
+</div>
+
+<!-- Task Edit Modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h3 id="modal-title">Редактировать задачу</h3>
+    <div class="modal-body">
+      <div class="main-col">
+        <label>Задача</label>
+        <textarea id="modal-text" rows="3"></textarea>
+        <label>Заметки</label>
+        <div class="notes-toolbar">
+          <button type="button" onclick="fmtCmd('bold')" title="Жирный"><b>B</b></button>
+          <button type="button" onclick="fmtCmd('insertUnorderedList')" title="Маркированный список">•</button>
+          <button type="button" onclick="fmtCmd('insertOrderedList')" title="Нумерованный список">1.</button>
+        </div>
+        <div class="notes-editor" id="modal-notes" contenteditable="true" data-placeholder="Быстрые заметки по задаче..."></div>
+      </div>
+      <div class="side-col">
+        <label>Приоритет</label>
+        <select id="modal-priority">
+          <option value="">Обычный</option>
+          <option value="important">🟢 Важно</option>
+          <option value="urgent">🔴 Срочно</option>
+        </select>
+        <label>Статус</label>
+        <select id="modal-status">
+          <option value="">В работе</option>
+          <option value="waiting">⏳ Ждём</option>
+        </select>
+        <label>Ждём от</label>
+        <input type="text" id="modal-waiting-for" placeholder="напр. Миша">
+        <label>Срок</label>
+        <input type="date" id="modal-deadline">
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn-danger" onclick="deleteFromModal()" style="margin-right:auto;background:#e74c3c;color:#fff;">🗑 Удалить</button>
+      <button class="btn-secondary" onclick="closeModal()">Отмена</button>
+      <button class="btn-primary" onclick="saveModal()">Сохранить</button>
+    </div>
+  </div>
+</div>
+</div><!-- /app-content -->
+
+<!-- PIN Screen -->
+<div class="pin-overlay" id="pin-overlay">
+  <div class="pin-box">
+    <div style="font-size:32px;margin-bottom:8px;">🔒</div>
+    <h3 id="pin-title">Задайте PIN</h3>
+    <p id="pin-hint" style="font-size:13px;color:#666;margin-bottom:16px;"></p>
+    <div class="pin-digits" id="pin-digits"></div>
+    <div class="pin-error" id="pin-error"></div>
+  </div>
+</div>
+
+<!-- Cluster Rename Modal -->
+<div class="modal-overlay" id="cluster-modal">
+  <div class="modal">
+    <h3>Редактировать колонку</h3>
+    <label>Название</label>
+    <input type="text" id="cluster-name-input">
+    <label>Цвет</label>
+    <div class="color-picker" id="color-picker"></div>
+    <div class="btn-row">
+      <button class="btn-secondary" onclick="closeClusterModal()">Отмена</button>
+      <button class="btn-primary" onclick="saveClusterModal()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+<script>
+// ===== FIREBASE CONFIG =====
+const firebaseConfig = {
+  apiKey: "AIzaSyBqJ84WJQAID2Wq2VX23s0VcbmjXs6-QgA",
+  authDomain: "planner-2038.firebaseapp.com",
+  databaseURL: "https://planner-2038-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "planner-2038",
+  storageBucket: "planner-2038.firebasestorage.app",
+  messagingSenderId: "739104273815",
+  appId: "1:739104273815:web:fc99b1ea5672f2352680d2"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// ===== PIN AUTH =====
+const PIN_STORAGE_KEY = 'planner_pin_hash';
+let pinHash = ''; // SHA-256 hash of the PIN, stored in Firebase and localStorage
+
+async function sha256(text) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(text);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function showPinScreen(setupMode) {
+  const overlay = document.getElementById('pin-overlay');
+  const title = document.getElementById('pin-title');
+  const hint = document.getElementById('pin-hint');
+  const digitsContainer = document.getElementById('pin-digits');
+  const errorEl = document.getElementById('pin-error');
+
+  overlay.style.display = 'flex';
+  if (setupMode) {
+    title.textContent = 'Задайте PIN';
+    hint.textContent = '4 цифры — этот PIN понадобится всем, кто откроет планнер';
+  } else {
+    title.textContent = 'Введите PIN';
+    hint.textContent = '';
+  }
+
+  let code = '';
+  digitsContainer.innerHTML = '';
+
+  for (let i = 0; i < 4; i++) {
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.inputMode = 'numeric';
+    inp.maxLength = 1;
+    inp.className = 'pin-digit';
+    inp.dataset.index = i;
+    inp.autocomplete = i === 0 ? 'one-time-code' : 'off';
+    inp.addEventListener('input', (e) => {
+      const val = e.target.value.replace(/\D/g, '');
+      e.target.value = val;
+      if (val) {
+        code = code.slice(0, i) + val + code.slice(i + 1);
+        e.target.classList.add('filled');
+        const next = digitsContainer.querySelector(`[data-index="${i + 1}"]`);
+        if (next) next.focus();
+        if (code.length === 4) handlePinSubmit(code, setupMode, errorEl, digitsContainer);
+      } else {
+        code = code.slice(0, i) + code.slice(i + 1);
+        e.target.classList.remove('filled');
+      }
+    });
+    inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace' && !e.target.value) {
+        const prev = digitsContainer.querySelector(`[data-index="${i - 1}"]`);
+        if (prev) { prev.focus(); prev.value = ''; prev.classList.remove('filled'); }
+      }
+      if (e.key === 'ArrowLeft') {
+        const prev = digitsContainer.querySelector(`[data-index="${i - 1}"]`);
+        if (prev) prev.focus();
+      }
+      if (e.key === 'ArrowRight') {
+        const next = digitsContainer.querySelector(`[data-index="${i + 1}"]`);
+        if (next) next.focus();
+      }
+    });
+    inp.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const paste = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '').slice(0, 4);
+      if (paste.length === 4) {
+        code = paste;
+        const inputs = digitsContainer.querySelectorAll('.pin-digit');
+        paste.split('').forEach((ch, idx) => {
+          inputs[idx].value = ch;
+          inputs[idx].classList.add('filled');
+        });
+        handlePinSubmit(code, setupMode, errorEl, digitsContainer);
+      }
+    });
+    digitsContainer.appendChild(inp);
+  }
+
+  setTimeout(() => digitsContainer.querySelector('[data-index="0"]').focus(), 100);
+}
+
+async function handlePinSubmit(code, setupMode, errorEl, digitsContainer) {
+  errorEl.textContent = '';
+
+    if (setupMode) {
+    // Admin setting up PIN: save hash to Firebase and localStorage
+    const hash = await sha256(code);
+    try {
+      await db.ref('config/pinHash').set(hash);
+      localStorage.setItem(PIN_STORAGE_KEY, hash);
+      pinHash = hash;
+      document.getElementById('pin-overlay').style.display = 'none';
+      document.getElementById('app-content').style.display = '';
+      initFirebase();
+    } catch (e) {
+      errorEl.textContent = 'Ошибка сохранения PIN. Проверьте подключение.';
+    }
+  } else {
+    // User entering PIN: check against hash from Firebase
+    const hash = await sha256(code);
+    const expectedHash = pinHash; // loaded from Firebase/localStorage
+    if (hash === expectedHash) {
+      localStorage.setItem(PIN_STORAGE_KEY, hash);
+      document.getElementById('pin-overlay').style.display = 'none';
+      document.getElementById('app-content').style.display = '';
+      initFirebase();
+    } else {
+      errorEl.textContent = 'Неверный PIN';
+      const inputs = digitsContainer.querySelectorAll('.pin-digit');
+      inputs.forEach(inp => { inp.value = ''; inp.classList.remove('filled'); });
+      inputs[0].focus();
+    }
+  }
+}
+
+const COLORS = ['#3498db','#2ecc71','#e74c3c','#f39c12','#9b59b6','#1abc9c','#e67e22','#95a5a6','#34495e','#e84393','#00b894','#6c5ce7'];
+
+const DEFAULT_CLUSTERS = [
+  { id: 'kp',    name: 'Контур.Персонал (КП)',  color: '#3498db' },
+  { id: 'zaika', name: 'Зайка (ИИ-эксперименты)', color: '#f39c12' },
+  { id: 'org',   name: 'Оргдизайн и права',     color: '#e67e22' },
+  { id: 'hrbp',  name: 'HRBP',                  color: '#27ae60' },
+  { id: 'ppo',   name: 'Проекты ППО',           color: '#9b59b6' },
+  { id: 'admin', name: 'Административка',       color: '#95a5a6' },
+  { id: 'syncs', name: 'Синхроны',              color: '#1abc9c' },
+  { id: 'personal', name: 'Личное',             color: '#6c5ce7' },
+  { id: 'growth', name: 'Развитие',             color: '#e84393' },
+];
+
+// Загружено из Контекст/ppo-tasks-2026-04-11.json
+const SEED_TASKS = [
+  { id: "t1", cluster: "kp", text: "Добавить метрику быстродействия в задачу 1275", status: "waiting", waitingFor: "Миша", priority: "", deadline: "", order: 9, doneAt: "", notes: "" },
+  { id: "t2", cluster: "kp", text: "Исследовать причину свёртывания баз нескольких экземпляров приложений 1275", status: "waiting", waitingFor: "Костя", priority: "", deadline: "", order: 8, done: false, doneAt: "", notes: "" },
+  { id: "t5", cluster: "kp", text: "Добавить метрики быстродействия было-стало в задачу 1487 (оптимизация ПФ)", status: "", waitingFor: "Костя", priority: "", deadline: "", order: 5, doneAt: "", notes: "" },
+  { id: "t6", cluster: "kp", text: "Собрать продуктовые метрики по КП до 20.04 (соблюдение дедлайнов законодательства, метрики значимых релизов, CSI, скорость ответа)", status: "", waitingFor: "", priority: "", deadline: "2026-04-20", order: 2, doneAt: "", notes: "" },
+  { id: "t10", cluster: "kp", text: "Валидировать командные цели КП в матрице на 2026 год по гайду от Вовы", status: "", waitingFor: "Таня Д", priority: "urgent", deadline: "2026-04-12", order: 0, doneAt: "", notes: "Комментарий Сергея З:\n\n1 цель = 1 проблема.\nВ целях порой критерии достижения != решение проблемы. Либо легко достижим.\nСложный язык целей, сходу непонять, что именно делаем.\nПричесать 10 целей, оставить актуальные в период в матрице.\nСвязать с целями HR-направления как на картинке.\nСейчас неявно про наши оптимизации, в какой они цели.\nЭпики в командных целях можно вписывать. А уже в личных как именно достичь.\nСергей нормально относится к целям: оптимизация за счет эпика 1 2 3.\nЧего не хватает — какие проблемы решаем.\nКакую значимую ценность принесем.\nКлючевая проблема - команда не автономна, только с помощью УИТ можно выполнить цели.\n\n-----------------------------------------\n\nЗаметки встречи с Таней\n\nRun & Change — хотят начать считать, Таня соотнесёт с деревом целей и поймет будет ли это новая личная цель Тани, так как связана с рентабельностью.\nИИ-пилот — если подтвердится, можно брать задачи из бэклога напрямую. \nНо компетенции разрабов с ИИ слабые: не умеют работать с API, часть не знает как зарегистрироваться в ChatGPT. Нужно учить.\nКлючевая ценность ИИ — повысить качество кода.\nЭксперты — личная цель Тани.\nЦели команды — схлопнуть 10 целей в ~6, 2 перенести в личные, добавить проблематику из холста в главную NSM\nКПЛЛ — кандидат на задачу ИИ-пилота: сделать абстракцию для мониторинга пользователей\nИзменить цель про людей и их развитие, а конкретика уже в личных.\nРевью в ВС.\n\nЗначимые эпики как способ достижения целей и решения проблематики\nцели Ксюше из нашего дерева (кандидатов пока выделил черным)" },
+  { id: "t11", cluster: "kp", text: "Ответить на вопрос Саши Ж по задаче 1571 в КП", status: "", waitingFor: "", priority: "", deadline: "", order: 6, doneAt: "", notes: "" },
+  { id: "t16", cluster: "kp", text: "Контролировать получение доступа Ксюше к базе КП", status: "waiting", waitingFor: "Даньшина", priority: "urgent", deadline: "", order: 2, doneAt: "2026-04-10T11:45:22.975Z", notes: "", done: true },
+  { id: "t26", cluster: "kp", text: "Провести преданалитику с Альбиной по стажёрам и СДПО", status: "", waitingFor: "", priority: "", deadline: "", order: 10, doneAt: "", notes: "" },
+  { id: "t30", cluster: "kp", text: "Оценить задачи КП на ран и чейндж по методике Вовы", status: "", waitingFor: "", priority: "", deadline: "", order: 4, doneAt: "", notes: "" },
+  { id: "t31", cluster: "kp", text: "Уточнить у Вовы бюджет и варианты развития кадровых сценариев силами КП", status: "", waitingFor: "", priority: "", deadline: "", order: 3, doneAt: "", notes: "" },
+  { id: "t2a", cluster: "kp", text: "Записать заметки по открытым больничным на вики (с Ксюшей)", status: "waiting", waitingFor: "Альбина", priority: "", deadline: "", order: 7, doneAt: "", notes: "Задача Ксюши: послушать, предложить варианты.\nКсюша проверяет как будет работать отзыв из отпуска во время больничного и что при больничном в командировке.\nНужен доступ к КП для моделирования.\n\nБольничный и N сценариев (продление, пересечение).\nУже сейчас процесс с вариациями.\n\nКлючевая проблема: необходимость перерасчетов. \nВ том числе непонятно как проводить переработки и отражать несколько часов работы больного?\n\nПри этом есть интеграции с СФР, но нет понимания как происходит взаимодействие и какие статусы получаем.\n\nГипотеза решения, что проставлять НН в момент открытых больничных, зная дату начала и окончания (из СФР).\nПри официальном закрытии БЛ → менять на Б на даты больничного (как изначально или меньше дней если раньше закрыли). \nПри продлении больничного проставлять НН на новый срок.\nЕсли сотрудник работал в больничном — ждем заявления и выплачиваем премией." },
+  { id: "t3", cluster: "zaika", text: "Сформулировать требования к ИИ-эксперименту по Соколову", status: "", waitingFor: "", priority: "urgent", deadline: "", order: 0, doneAt: "2026-04-08T12:14:28.275Z", notes: "Набрать компетенций, чтобы обучить других в КБА.\nНе сжигать деньги в ИИ.\nНе переписать всё, а ускорять выделение модулей.", done: true },
+  { id: "t4", cluster: "zaika", text: "Протестировать ИИ как рекомендатора для нарезки систем на микросервисы", status: "", waitingFor: "", priority: "", deadline: "", order: 4, doneAt: "", notes: "" },
+  { id: "t8", cluster: "zaika", text: "Поставить задачу Тане М определить кандидатуру на роль приёмника Альбины в проекте Зайка", status: "", waitingFor: "", priority: "", deadline: "", order: 5, doneAt: "", notes: "" },
+  { id: "t9", cluster: "zaika", text: "Подготовить формулировки ограничений Зайка (полномочия + найм экспертов для стейкхолдера)", status: "", waitingFor: "", priority: "urgent", deadline: "", order: 0, doneAt: "", notes: "Нужно описание процессов 2 и 3 уровня, все развилки накопленные годами.\nРасшить Альбину, Олю и Колю — надо ли расшивать?\n\nТимур Исмагилов дал добро изучать Контур НТТ на предмет миграции на 1С.ЗУП.\n\nДля восстановления текущей картинки as is по сценариям мне нужны эксперты. Как минимум: Альбина Пришедько, Оля Тиунова, Слава Шинкарев Костя Абжуев и ты.\nАльбина и Оля — описание бизнес-сценариев, вы с Костей — как это устроено, какие интеграции есть и какие ограничения.\n\nСейчас я формирую паспорт проекта и фиксирую какие и сколько ресурсов необходимо, чтобы проект реализовать и чтоб шел гладко без задержек.\n\nТы, единственный, кто знает как устроено КЗ для Контура в плане обвязок и кастомных деталей.\nПодскажи, пожалуйста, сколько времени ты бы мог выделять на этот проект? (Если нет, то почему и какие условия, чтобы был ответ да)." },
+  { id: "t17", cluster: "zaika", text: "Зафиксировать итоги встречи со Сбером (опыт 2029)", status: "", waitingFor: "", priority: "", deadline: "", order: 6, doneAt: "", notes: "" },
+  { id: "t19", cluster: "zaika", text: "Запросить у рисковиков ОС по промедлению миграции устаревших систем", status: "", waitingFor: "", priority: "", deadline: "", order: 3, doneAt: "", notes: "<ol style=\"color: rgb(0, 0, 0); font-size: 15px;\"><li>Рост доли экселек (новые процессы)</li><li>Посчитать % новой функциональности</li><li>Контроли, оценка.</li></ol>" },
+  { id: "t21", cluster: "zaika", text: "Заполнить анкету по ЗУП как кандидату миграции", status: "", waitingFor: "", priority: "", deadline: "", order: 7, doneAt: "", notes: "" },
+  { id: "t13", cluster: "org", text: "Собрать таблицу стейкхолдеров проекта по единой оргструктуре", status: "", waitingFor: "", priority: "", deadline: "", order: 0, doneAt: "", notes: "Добавить что РЭВС может стать командой изменений." },
+  { id: "t27", cluster: "org", text: "Определить роль ВБП и статус по методике оргдизайна", status: "", waitingFor: "", priority: "", deadline: "", order: 2, doneAt: "", notes: "" },
+  { id: "t14", cluster: "hrbp", text: "Вынести HRBP в отдельный свимлайн в кайтене", status: "", waitingFor: "", priority: "", deadline: "", order: 1, doneAt: "", notes: "" },
+  { id: "t15", cluster: "hrbp", text: "Провести ревью разделов дискавери HRBP (Саша Х)", status: "", waitingFor: "", priority: "urgent", deadline: "", order: 0, doneAt: "", notes: "" },
+  { id: "t20", cluster: "hrbp", text: "Валидировать и заполнить таблицы сценариев HRBP на вики (с Олей)", status: "", waitingFor: "", priority: "", deadline: "", order: 3, doneAt: "", notes: "" },
+  { id: "t32", cluster: "org", text: "Зафиксировать резюме двух встреч с HRBP по оргразвитию", status: "", waitingFor: "", priority: "", deadline: "", order: 1, doneAt: "", notes: "" },
+  { id: "t7", cluster: "ppo", text: "Агрегировать ОС по продакту КД с помощью ИИ", status: "", waitingFor: "", priority: "", deadline: "", order: 1, doneAt: "", notes: "" },
+  { id: "t7b", cluster: "ppo", text: "Организовать встречу на троих с Димой по дальнейшим шагам с КД", status: "", waitingFor: "", priority: "", deadline: "", order: 2, doneAt: "", notes: "" },
+  { id: "t18", cluster: "ppo", text: "Заполнить паспорт проекта масштабирования шины", status: "", waitingFor: "", priority: "", deadline: "", order: 3, doneAt: "", notes: "" },
+  { id: "t28", cluster: "ppo", text: "Узнать источник стоимости ФТЕ на 1 сотрудника (Таня Б, Катя Л)", status: "", waitingFor: "", priority: "", deadline: "", order: 4, doneAt: "", notes: "" },
+  { id: "t12", cluster: "admin", text: "Попросить Яну Мотрий дать ОС по упрощению артефактов аналитика ППО", status: "", waitingFor: "", priority: "", deadline: "", order: 4, doneAt: "", notes: "" },
+  { id: "t22", cluster: "admin", text: "Валидировать цели проджекта Олега в ППО", status: "waiting", waitingFor: "Олег", priority: "", deadline: "", order: 3, doneAt: "", notes: "" },
+  { id: "t23", cluster: "kp", text: "Валидировать цели МР КП по гайду от Вовы", status: "", waitingFor: "", priority: "urgent", deadline: "", order: 1, doneAt: "2026-04-09T10:14:43.419Z", notes: "", done: true },
+  { id: "t24", cluster: "admin", text: "Согласовать свои цели с руководителем", status: "", waitingFor: "", priority: "urgent", deadline: "", order: 0, doneAt: "2026-04-10T04:42:26.078Z", notes: "", done: true },
+  { id: "t29", cluster: "admin", text: "Составить конспект встреч обучения проектов (расшифровки + выжимка применимого)", status: "", waitingFor: "", priority: "", deadline: "", order: 5, doneAt: "", notes: "таблицы противников" },
+  { id: "t25", cluster: "admin", text: "Составить ИПР для себя и Олега", status: "", waitingFor: "", priority: "", deadline: "", order: 6, doneAt: "", notes: "" },
+  { id: "t33", cluster: "admin", text: "Привлечь HRBP к кейсу Ксюши (приземление в корректную ФЗ)", status: "waiting", waitingFor: "Сивкова", priority: "urgent", deadline: "", order: 1, doneAt: "", notes: "Отдельный тред с Таней" },
+  { id: "sync1", cluster: "syncs", text: "Таня Дредитова", status: "", waitingFor: "", priority: "", deadline: "", order: 0, doneAt: "", notes: "1. Ксюша - 2-я линия ТП, была подопытным. \nПотом уже учить первую линию премудростям.\nЦель - брать еще больше задач, не привлекая разработчиков.\n→ Придумать свимлайн для задач Ксюши в ютреке\n→ Тане скинули данные по экспертам, но пока нет времени свести.\nТак поймем реальную ценность экспертов\n2. Сформировать требования принимающей команды по регистратору.\nТекущая команда не для развития, бас-фактор по С#. Нужно оценить бэклог!!!\n→ Оля Шмидт готова давать фронта, если придем заранее.\n3. С Лидой начинаем допытывание (она осознает, что не тянет, но не осознает, что из-за этого могут уволить), нужны документальные доказательства, пруфы.\n→ передан контекст в ФЗ.\n4. Миша. 3 месяца испыталки завершается 27.05.26. Набор пруфов.\nВ начале мая дадим 2 стола.\n5. Ран и чейндж, глоссарий и термины ВС.\n→ получили от Вовы.\n6. Перераспределение сервисов\n→ Таня напишет письмо\n7. Производственные метрики\n→ Переезд на суперсет приоритетная задача у Тани\n8. Помощь мидлам разработки в бизнесовой оценке задач техкачества — да." },
+  { id: "sync2", cluster: "syncs", text: "Сергей Анохин", status: "", waitingFor: "", priority: "", deadline: "", order: 1, doneAt: "", notes: "" },
+  { id: "sync3", cluster: "syncs", text: "Олег Клюев", status: "", waitingFor: "", priority: "", deadline: "", order: 2, doneAt: "", notes: "Уведомления\nПивот на валидацию гипотез (например: предпочтительный канал коммуникации или изменение культуры про чтение почты) и создание масштабируемого решения.\nКлючевая метрика: повышение конверсии в действие и убрать ручной подстраховочный труд кадровиков." },
+  { id: "sync4", cluster: "syncs", text: "Вова Верещагин", status: "", waitingFor: "", priority: "", deadline: "", order: 3, doneAt: "", notes: "" },
+  { id: "sync5", cluster: "syncs", text: "Андрей Соколов", status: "", waitingFor: "", priority: "", deadline: "", order: 4, doneAt: "", notes: "" },
+  { id: "sync6", cluster: "syncs", text: "Саша Ходченков", status: "", waitingFor: "", priority: "", deadline: "", order: 5, doneAt: "", notes: "" },
+  { id: "sync7", cluster: "syncs", text: "Сергей Злобин", status: "", waitingFor: "", priority: "", deadline: "", order: 6, doneAt: "", notes: "Как занести задачи в КД, чтобы приложили усилие КАК организовать." },
+  { id: "sync8", cluster: "syncs", text: "Ксюша Алалыкина", status: "", waitingFor: "", priority: "", deadline: "", order: 7, doneAt: "", notes: "Если у Ксюши заканчиваются задачи — маякнет, прорыщу бэклог." },
+  { id: "t1775673052328d8w13", cluster: "admin", text: "Подготовить тезисы для летучки УИТ", status: "", waitingFor: "", priority: "urgent", deadline: "", order: 0, doneAt: "2026-04-09T03:47:58.140Z", notes: "", done: true },
+  { id: "t17756732360774dyx8", cluster: "syncs", text: "Альбина Пришедько", status: "", waitingFor: "", priority: "", deadline: "", order: 8, doneAt: "", notes: "1. Ксюша — руки разбирать КП.\nЕсли не брать приемника, то кажется ОК.\n\n2. Ждем ТЗ по открытым больничным\n3. Ждем ТЗ по наставничеству.", done: false },
+  { id: "t1775712912041y22ng", cluster: "zaika", text: "Заполнение анкеты ЗУП", status: "waiting", waitingFor: "Альбина, Тиунова", priority: "", deadline: "", order: 2, doneAt: "", notes: "", done: false },
+  { id: "t1775795835521vtkbb", cluster: "zaika", text: "Написать резюме по встрече с Наливайко и наметить следующие шаги", status: "", waitingFor: "", priority: "", deadline: "", order: 1, doneAt: "", notes: "<div>Тир-1</div><div><br></div><div>Кажется, нам не нужна приоритезация Дениса, чтобы действовать.</div><div>Для зайки надо абстракция кплл, это наш тир 1.</div><div>Нам ничего не мешает сказать Денису, го нашими силами решать</div><div><br></div>", done: false },
+  { id: "t1775796057411lxdsc", cluster: "admin", text: "Заполнить метрики 1 кв по КП", status: "", waitingFor: "", priority: "", deadline: "", order: 2, doneAt: "", notes: "https://docs.google.com/spreadsheets/d/1iWuQK07fEVayR6wRV0UKJtoPrP6dzxOsTKZcI_VuzsY/edit?gid=1496466742#gid=1496466742<div><br></div><div>Подробнее в ММ.</div>", done: false },
+  { id: "t1775799002616tx6tj", cluster: "ppo", text: "Провести дискавери с Тиуновой по справкам", status: "waiting", waitingFor: "Клюев", priority: "urgent", deadline: "", order: 0, doneAt: "", notes: "", done: false },
+  { id: "t1775821554136cibrh", cluster: "kp", text: "Подготовить контекст по 1518 на дейлик в Пн", status: "", waitingFor: "", priority: "urgent", deadline: "", order: 1, doneAt: "", notes: "Попрошу тебя рассказать контекст по задаче <a href=\"https://yt.skbkontur.ru/issue/KPK-1518\" rel=\"noreferrer\" target=\"_blank\">KPK-1518</a> Доработать процесс приема неявок УКС - выявление существующих неявок не только по табелю на дейлике в понедельник, чтобы разработчики оценили. От этого будут зависеть сроки и приоритеты задач, которые я положу в Мишу и они пойдут в тот самый отчёт по его работе в конце апреля.", done: false }
+];
+
+let tasks = [];
+let currentView = 'all';
+let editingTaskId = null;
+let doneCollapsed = false;
+let editingClusterId = null;
+let selectedColor = '';
+
+function uid() { return 't' + Date.now() + Math.random().toString(36).slice(2, 7); }
+function escHtml(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+function setStatus(msg, isError) {
+  const s = document.getElementById('load-status');
+  const e = document.getElementById('load-error');
+  if (s) s.textContent = msg;
+  if (e && isError) { e.textContent = msg; e.style.display = 'block'; }
+}
+function getClusterInfo(cid) { return (window.CLUSTERS || []).find(c => c.id === cid) || { name: 'Без кластера', color: '#999' }; }
+
+// ===== FIREBASE: init =====
+function initFirebase() {
+  let fbReady = false;
+
+  setStatus('Подключение к Firebase…');
+
+  // Проверка доступности gstatic
+  const checkGstatic = new Image();
+  checkGstatic.onload = () => setStatus('gstatic OK, загрузка данных…');
+  checkGstatic.onerror = () => setStatus('⚠️ gstatic.com недоступен — возможен прокси/блокировка', true);
+  checkGstatic.src = 'https://www.gstatic.com/firebasejs/10.12.0/pixel.png';
+
+  db.ref('clusters').on('value', snap => {
+    const data = snap.val();
+    if (data) {
+      let savedClusters = Object.values(data);
+      savedClusters.sort((a, b) => (a.order || 0) - (b.order || 0));
+      const savedIds = new Set(savedClusters.map(c => c.id));
+      window.CLUSTERS = [...savedClusters];
+      DEFAULT_CLUSTERS.forEach(dc => {
+        if (!savedIds.has(dc.id)) window.CLUSTERS.push({ ...dc });
+      });
+    } else {
+      window.CLUSTERS = [...DEFAULT_CLUSTERS];
+    }
+    if (!fbReady) { fbReady = true; finishLoad(); }
+    renderBoard();
+    renderDone();
+  }, err => {
+    console.error('Firebase clusters error:', err);
+    setStatus('Ошибка подключения к Firebase: ' + (err.message || err.code), true);
+    window.CLUSTERS = [...DEFAULT_CLUSTERS];
+    if (!fbReady) { fbReady = true; finishLoad(); }
+    renderBoard();
+    renderDone();
+  });
+
+  db.ref('tasks').on('value', snap => {
+    const data = snap.val();
+    if (data) {
+      tasks = Object.values(data);
+    } else {
+      const seedObj = {};
+      SEED_TASKS.forEach(t => {
+        seedObj[t.id] = {
+          id: t.id, cluster: t.cluster, text: t.text,
+          notes: t.notes || '', status: t.status || '',
+          waitingFor: t.waitingFor || '', priority: t.priority || '',
+          deadline: t.deadline || '', order: t.order !== undefined ? t.order : 999,
+          done: t.done || false, doneAt: t.doneAt || ''
+        };
+      });
+      db.ref('tasks').set(seedObj).catch(() => {
+        tasks = SEED_TASKS.map(t => ({...t, status: t.status || '', waitingFor: t.waitingFor || '', priority: t.priority || '', deadline: t.deadline || '', order: t.order !== undefined ? t.order : 999, doneAt: t.doneAt || '', notes: t.notes || '', done: t.done || false}));
+        if (!fbReady) { fbReady = true; finishLoad(); }
+        renderBoard(); renderDone();
+      });
+      return;
+    }
+    tasks.forEach(t => {
+      if (!('status' in t)) t.status = '';
+      if (!('waitingFor' in t)) t.waitingFor = '';
+      if (!('order' in t)) t.order = 999;
+      if (!('doneAt' in t)) t.doneAt = '';
+      if (!('notes' in t)) t.notes = '';
+      if (!('done' in t)) t.done = false;
+    });
+    if (!fbReady) { fbReady = true; finishLoad(); }
+    renderBoard();
+    renderDone();
+  }, err => {
+    console.error('Firebase tasks error:', err);
+    setStatus('Ошибка задач: ' + (err.message || err.code), true);
+    tasks = SEED_TASKS.map(t => ({...t, status: t.status || '', waitingFor: t.waitingFor || '', priority: t.priority || '', deadline: t.deadline || '', order: t.order !== undefined ? t.order : 999, doneAt: t.doneAt || '', notes: t.notes || '', done: t.done || false}));
+    if (!fbReady) { fbReady = true; finishLoad(); }
+    renderBoard(); renderDone();
+  });
+
+  db.ref('clusters').once('value').then(snap => {
+    if (!snap.exists()) db.ref('clusters').set(Object.fromEntries(DEFAULT_CLUSTERS.map(c => [c.id, c]))).catch(() => {});
+  }).catch(() => {});
+
+  function finishLoad() {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('board').style.display = '';
+    document.getElementById('done-section').style.display = '';
+  }
+
+  setTimeout(() => {
+    if (!fbReady) {
+      fbReady = true;
+      tasks = SEED_TASKS.map(t => ({...t, status: t.status || '', waitingFor: t.waitingFor || '', priority: t.priority || '', deadline: t.deadline || '', order: t.order !== undefined ? t.order : 999, doneAt: t.doneAt || '', notes: t.notes || '', done: t.done || false}));
+      window.CLUSTERS = [...DEFAULT_CLUSTERS];
+      finishLoad(); renderBoard(); renderDone();
+      const ld = document.getElementById('loading');
+      ld.textContent = '⚠️ Firebase недоступен. Изменения не синхронизируются.';
+      ld.style.display = 'block'; ld.style.color = '#e74c3c'; ld.style.padding = '12px'; ld.style.background = '#fff3f3'; ld.style.borderRadius = '8px';
+    }
+  }, 10000);
+}
+
+function fbUpdateTask(id, updates) { db.ref('tasks/' + id).update(updates); }
+function fbAddTask(task) { db.ref('tasks/' + task.id).set(task); }
+function fbRemoveTask(id) { db.ref('tasks/' + id).remove(); }
+function fbUpdateCluster(id, updates) { db.ref('clusters/' + id).update(updates); }
+
+function renderBoard() {
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  if (currentView === 'done') { board.style.display = 'none'; } else { board.style.display = ''; }
+
+  let filtered = tasks.filter(t => !t.done);
+  if (currentView === 'urgent') filtered = filtered.filter(t => t.priority === 'urgent');
+  if (currentView === 'important') filtered = filtered.filter(t => t.priority === 'important');
+  if (currentView === 'waiting') filtered = filtered.filter(t => t.status === 'waiting');
+  if (currentView === 'week') filtered = filtered.filter(t => t.priority === 'urgent' || t.priority === 'important' || t.deadline || t.status === 'waiting');
+
+  const clusters = window.CLUSTERS || DEFAULT_CLUSTERS;
+  clusters.forEach(cluster => {
+    let clusterTasks = filtered.filter(t => t.cluster === cluster.id);
+    // Sort: urgent (0) → important (1) → normal (2), then by order within group
+    const pWeight = { urgent: 0, important: 1, '': 2 };
+    clusterTasks.sort((a, b) => {
+      const pa = pWeight[a.priority] ?? 2;
+      const pb = pWeight[b.priority] ?? 2;
+      if (pa !== pb) return pa - pb;
+      return a.order - b.order;
+    });
+
+    const div = document.createElement('div');
+    div.className = 'cluster';
+    div.draggable = true;
+    div.dataset.clusterId = cluster.id;
+    div.innerHTML = `
+      <div class="cluster-header">
+        <span class="cluster-dot" style="background:${cluster.color}" data-cluster-edit="${cluster.id}" title="Редактировать колонку"></span>
+        <span class="cluster-name" data-cluster-rename="${cluster.id}" title="Двойной клик — переименовать">${escHtml(cluster.name)}</span>
+        <span class="task-count">${clusterTasks.length}</span>
+      </div>
+      <div class="task-list" data-cluster="${cluster.id}">
+        ${clusterTasks.length === 0 ? '<div class="empty-hint">Перетащи сюда</div>' : ''}
+      </div>
+      <div class="add-task-row">
+        <input placeholder="+ Добавить задачу" data-cluster-input="${cluster.id}" onkeydown="handleAddKey(event, this)">
+      </div>
+    `;
+    board.appendChild(div);
+
+    // Cluster drag for reordering
+    const headerEl = div.querySelector('.cluster-header');
+    headerEl.style.cursor = 'grab';
+    div.addEventListener('dragstart', e => {
+      if (e.target.closest('.task') || e.target.closest('.add-task-row') || e.target.closest('.task-list')) return;
+      e.dataTransfer.setData('cluster-id', cluster.id);
+      e.dataTransfer.effectAllowed = 'move';
+      div.style.opacity = '0.4';
+    });
+    div.addEventListener('dragend', () => { div.style.opacity = '1'; });
+    div.addEventListener('dragover', e => {
+      if (!e.dataTransfer.types.includes('cluster-id')) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+    });
+    div.addEventListener('drop', e => {
+      if (!e.dataTransfer.types.includes('cluster-id')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const fromId = e.dataTransfer.getData('cluster-id');
+      if (fromId === cluster.id) return;
+      reorderClusters(fromId, cluster.id);
+    });
+
+    const nameEl = div.querySelector('.cluster-name');
+    nameEl.addEventListener('dblclick', e => { e.stopPropagation(); openClusterModal(cluster.id); });
+    const dotEl = div.querySelector('[data-cluster-edit]');
+    dotEl.addEventListener('click', e => { e.stopPropagation(); openClusterModal(cluster.id); });
+
+    const listEl = div.querySelector('.task-list');
+
+    // Task reorder within column
+    listEl.addEventListener('dragover', e => {
+      if (e.dataTransfer.types.includes('cluster-id')) return;
+      e.preventDefault();
+      listEl.classList.add('drag-over');
+      // Visual indicator: show where task will be dropped
+      const afterElement = getDragAfterElement(listEl, e.clientY);
+      const dragging = document.querySelector('.dragging');
+      if (afterElement == null) {
+        listEl.appendChild(dragging);
+      } else {
+        listEl.insertBefore(dragging, afterElement);
+      }
+    });
+
+    listEl.addEventListener('dragleave', e => {
+      // Only remove highlight if actually leaving the list
+      if (!listEl.contains(e.relatedTarget)) {
+        listEl.classList.remove('drag-over');
+      }
+    });
+
+    listEl.addEventListener('drop', e => {
+      if (e.dataTransfer.types.includes('cluster-id')) return;
+      e.preventDefault();
+      listEl.classList.remove('drag-over');
+      const taskId = e.dataTransfer.getData('text/plain');
+      const task = tasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      // Determine new cluster
+      const newCluster = cluster.id;
+
+      // Recalculate order for all tasks in this column based on visual position
+      const visualTasks = [...listEl.querySelectorAll('.task')];
+      const updates = {};
+      visualTasks.forEach((el, idx) => {
+        const tId = el.dataset.taskId;
+        if (tId) updates['tasks/' + tId] = { ...tasks.find(t => t.id === tId), order: idx };
+      });
+
+      // If moving between columns, also update cluster
+      if (task.cluster !== newCluster) {
+        updates['tasks/' + taskId].cluster = newCluster;
+      }
+
+      db.ref().update(updates);
+    });
+
+    clusterTasks.forEach(task => { listEl.appendChild(createTaskElement(task)); });
+  });
+}
+
+function getDragAfterElement(container, y) {
+  const draggableElements = [...container.querySelectorAll('.task:not(.dragging)')];
+  return draggableElements.reduce((closest, child) => {
+    const box = child.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    if (offset < 0 && offset > closest.offset) {
+      return { offset, element: child };
+    } else {
+      return closest;
+    }
+  }, { offset: Number.NEGATIVE_INFINITY }).element;
+}
+
+function createTaskElement(task) {
+  const div = document.createElement('div');
+  let cls = 'task';
+  if (task.priority === 'urgent') cls += ' priority-urgent';
+  else if (task.priority === 'important') cls += ' priority-important';
+  div.className = cls;
+  div.draggable = true;
+  div.dataset.taskId = task.id;
+
+  const meta = [];
+  if (task.waitingFor) meta.push(`<span class="badge waiting">⏳ ${escHtml(task.waitingFor)}</span>`);
+  if (task.deadline) meta.push(`<span class="badge deadline">📅 ${task.deadline}</span>`);
+  if (task.notes) meta.push('<span class="note-indicator">📝</span>');
+
+  div.innerHTML = `
+    <span class="drag-handle">⠿</span>
+    <span class="task-text">${escHtml(task.text)}</span>
+    <div class="task-actions">
+      <button class="important-btn${task.priority === 'important' ? ' active' : ''}" onclick="togglePriority('${task.id}','important')" title="Важно">🟢</button>
+      <button class="urgent-btn${task.priority === 'urgent' ? ' active' : ''}" onclick="togglePriority('${task.id}','urgent')" title="Срочно">🔴</button>
+      <button onclick="editTask('${task.id}')" title="Редактировать">✏️</button>
+      <button onclick="toggleDone('${task.id}')" title="Завершить">✅</button>
+    </div>
+    ${meta.length ? '<div class="task-meta">' + meta.join('') + '</div>' : ''}
+  `;
+
+  div.addEventListener('dblclick', () => editTask(task.id));
+  div.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', task.id); div.classList.add('dragging'); });
+  div.addEventListener('dragend', () => div.classList.remove('dragging'));
+  return div;
+}
+
+function renderDone() {
+  const doneList = document.getElementById('done-list');
+  const doneCount = document.getElementById('done-count');
+  const doneTasks = tasks.filter(t => t.done).sort((a, b) => (b.doneAt || '').localeCompare(a.doneAt || ''));
+  doneCount.textContent = doneTasks.length ? `(${doneTasks.length})` : '';
+  doneList.innerHTML = doneTasks.length === 0
+    ? '<div class="empty-hint">Пока нет завершённых</div>'
+    : doneTasks.map(t => {
+        const ci = getClusterInfo(t.cluster);
+        return `<div class="done-item">
+          <span class="done-cluster" style="background:${ci.color}22;color:${ci.color}">${escHtml(ci.name)}</span>
+          <span class="done-text done">${escHtml(t.text)}</span>
+          <span class="done-date">${formatDate(t.doneAt)}</span>
+          <button class="done-undo" onclick="toggleDone('${t.id}')" title="Вернуть">↩</button>
+        </div>`;
+      }).join('');
+}
+
+function toggleDoneCollapse() {
+  doneCollapsed = !doneCollapsed;
+  document.getElementById('done-list').classList.toggle('collapsed', doneCollapsed);
+  document.getElementById('done-arrow').classList.toggle('collapsed', doneCollapsed);
+}
+
+function showView(view) {
+  currentView = view;
+  document.querySelectorAll('.controls button').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('btn-' + view);
+  if (btn) btn.classList.add('active');
+  renderBoard();
+}
+
+function handleAddKey(e, input) {
+  if (e.key === 'Enter' && input.value.trim()) {
+    const clusterId = input.dataset.clusterInput;
+    const task = {
+      id: uid(), cluster: clusterId, text: input.value.trim(),
+      notes: '', status: '', waitingFor: '', priority: '', deadline: '',
+      order: tasks.filter(t => t.cluster === clusterId && !t.done).length,
+      done: false, doneAt: ''
+    };
+    fbAddTask(task);
+    input.value = '';
+  }
+}
+
+function editTask(id) {
+  editingTaskId = id;
+  const task = tasks.find(t => t.id === id);
+  if (!task) return;
+  document.getElementById('modal-text').value = task.text;
+  document.getElementById('modal-notes').innerHTML = task.notes || '';
+  document.getElementById('modal-priority').value = task.priority;
+  document.getElementById('modal-status').value = task.status;
+  document.getElementById('modal-waiting-for').value = task.waitingFor;
+  document.getElementById('modal-deadline').value = task.deadline;
+  document.getElementById('modal').classList.add('open');
+}
+
+function deleteFromModal() {
+  if (editingTaskId && confirm('Удалить задачу?')) {
+    fbRemoveTask(editingTaskId);
+    closeModal();
+  }
+}
+
+function closeModal() { document.getElementById('modal').classList.remove('open'); editingTaskId = null; }
+function closeClusterModal() { document.getElementById('cluster-modal').classList.remove('open'); editingClusterId = null; }
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (document.getElementById('cluster-modal').classList.contains('open')) closeClusterModal();
+    else if (document.getElementById('modal').classList.contains('open')) closeModal();
+  }
+});
+
+function saveModal() {
+  if (!editingTaskId) return;
+  fbUpdateTask(editingTaskId, {
+    text: document.getElementById('modal-text').value.trim(),
+    notes: document.getElementById('modal-notes').innerHTML,
+    priority: document.getElementById('modal-priority').value,
+    status: document.getElementById('modal-status').value,
+    waitingFor: document.getElementById('modal-waiting-for').value.trim(),
+    deadline: document.getElementById('modal-deadline').value,
+  });
+  closeModal();
+}
+
+function toggleDone(id) {
+  const task = tasks.find(t => t.id === id);
+  if (!task) return;
+  fbUpdateTask(id, task.done ? { done: false, doneAt: '' } : { done: true, doneAt: new Date().toISOString() });
+}
+
+function togglePriority(id, type) {
+  const task = tasks.find(t => t.id === id);
+  if (!task) return;
+  // Переключение: если уже этот тип — снять, иначе — поставить
+  fbUpdateTask(id, { priority: task.priority === type ? '' : type });
+}
+
+function deleteTask(id) {
+  if (confirm('Удалить задачу?')) fbRemoveTask(id);
+}
+
+function fmtCmd(cmd) { document.execCommand(cmd, false, null); document.getElementById('modal-notes').focus(); }
+
+function openClusterModal(id) {
+  editingClusterId = id;
+  const cluster = (window.CLUSTERS || []).find(c => c.id === id);
+  if (!cluster) return;
+  document.getElementById('cluster-name-input').value = cluster.name;
+  selectedColor = cluster.color;
+  renderColorPicker();
+  document.getElementById('cluster-modal').classList.add('open');
+}
+function saveClusterModal() {
+  if (!editingClusterId) return;
+  const name = document.getElementById('cluster-name-input').value.trim();
+  if (name) fbUpdateCluster(editingClusterId, { name, color: selectedColor });
+  closeClusterModal();
+}
+function renderColorPicker() {
+  document.getElementById('color-picker').innerHTML = COLORS.map(c =>
+    `<div class="color-swatch${c === selectedColor ? ' selected' : ''}" style="background:${c}" onclick="selectColor('${c}')"></div>`
+  ).join('');
+}
+function selectColor(c) { selectedColor = c; renderColorPicker(); }
+
+function exportData() {
+  const data = { clusters: window.CLUSTERS || DEFAULT_CLUSTERS, tasks, exportedAt: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'ppo-tasks-' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+}
+
+function backupFullHtml() {
+  const data = { clusters: window.CLUSTERS || DEFAULT_CLUSTERS, tasks };
+  const dataStr = JSON.stringify(data, null, 2);
+  const now = new Date().toLocaleString('ru-RU');
+  const dateSlug = new Date().toISOString().slice(0, 10);
+  const totalTasks = data.tasks.length;
+  const activeTasks = data.tasks.filter(t => !t.done).length;
+  const doneTasks = data.tasks.filter(t => t.done).length;
+  const clusterCount = data.clusters.length;
+  const notedTasks = data.tasks.filter(t => t.notes).length;
+
+  // Экранируем dataStr для безопасной вставки в <script>
+  const safeDataStr = dataStr.replace(/<\//g, '<\\/');
+
+  const lines = [];
+  lines.push('<!DOCTYPE html>');
+  lines.push('<html lang="ru">');
+  lines.push('<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">');
+  lines.push('<title>Бэкап ППО TODO — ' + dateSlug + '</title>');
+  lines.push('<style>body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;padding:40px;max-width:800px;margin:0 auto;background:#f0f2f5;color:#1a1a2e}h1{font-size:20px;margin-bottom:8px}.sub{color:#666;font-size:14px;margin-bottom:24px}.card{background:#fff;border-radius:10px;padding:20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.08)}h2{font-size:15px;margin-bottom:8px}p{font-size:14px;color:#555;margin-bottom:6px}pre{background:#f5f5f5;padding:12px;border-radius:6px;font-size:12px;max-height:300px;overflow:auto}code{background:#f0f0f0;padding:1px 5px;border-radius:3px;font-size:12px}.btn{display:inline-block;padding:10px 20px;background:#1a1a2e;color:#fff;border-radius:6px;text-decoration:none;font-size:14px;margin-right:8px;cursor:pointer;border:none}.btn:hover{background:#2a2a4e}</style>');
+  lines.push('</head><body>');
+  lines.push('<h1>Бэкап ППО TODO</h1>');
+  lines.push('<p class="sub">Создан: ' + escHtml(now) + '</p>');
+  lines.push('<div class="card"><h2>Сводка</h2>');
+  lines.push('<p>Всего задач: <b>' + totalTasks + '</b> | Активных: <b>' + activeTasks + '</b> | Завершённых: <b>' + doneTasks + '</b> | Колонок: <b>' + clusterCount + '</b> | С заметками: <b>' + notedTasks + '</b></p></div>');
+  lines.push('<div class="card"><h2>Как восстановить</h2>');
+  lines.push('<p>1. Открой <code>planner.html</code> в браузере</p>');
+  lines.push('<p>2. Нажми <code>💾 Экспорт JSON</code> — сохрани текущие данные</p>');
+  lines.push('<p>3. Открой консоль (F12) и вставь:</p>');
+  lines.push('<pre>db.ref(\'tasks\').remove().then(() => db.ref(\'tasks\').set(window.BACKUP_DATA.tasks))</pre>');
+  lines.push('<p>4. Для колонок:</p>');
+  lines.push('<pre>db.ref(\'clusters\').set(Object.fromEntries(window.BACKUP_DATA.clusters.map(c => [c.id, c])))</pre></div>');
+  lines.push('<div class="card"><h2>Сырые данные</h2>');
+  lines.push('<pre>' + escHtml(dataStr) + '</pre></div>');
+  lines.push('<button class="btn" onclick="downloadJson()">Скачать JSON</button>');
+  lines.push('<script>window.BACKUP_DATA=' + safeDataStr + ';function downloadJson(){var b=new Blob([JSON.stringify(window.BACKUP_DATA,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="ppo-backup-' + dateSlug + '.json";a.click()}<\/script>');
+  lines.push('</body></html>');
+
+  const backupHtml = lines.join('\n');
+  const blob = new Blob([backupHtml], { type: 'text/html' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'ppo-backup-' + dateSlug + '.html';
+  a.click();
+}
+
+function formatDate(ds) {
+  if (!ds) return '';
+  const d = new Date(ds);
+  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function reorderClusters(fromId, toId) {
+  const clusters = window.CLUSTERS || [...DEFAULT_CLUSTERS];
+  const fromIdx = clusters.findIndex(c => c.id === fromId);
+  const toIdx = clusters.findIndex(c => c.id === toId);
+  if (fromIdx === -1 || toIdx === -1) return;
+  const [moved] = clusters.splice(fromIdx, 1);
+  clusters.splice(toIdx, 0, moved);
+  window.CLUSTERS = clusters;
+  const updates = {};
+  clusters.forEach((c, i) => { updates['clusters/' + c.id] = { ...c, order: i }; });
+  db.ref().update(updates);
+  renderBoard();
+}
+
+// ===== INIT =====
+(async function init() {
+  // 1. Check if PIN is set in Firebase
+  const snap = await db.ref('config/pinHash').once('value');
+  const existingHash = snap.val();
+
+  // 2. Check local storage
+  const localHash = localStorage.getItem(PIN_STORAGE_KEY);
+
+  if (!existingHash) {
+    // No PIN set — admin must create one
+    showPinScreen(true);
+  } else {
+    pinHash = existingHash;
+    if (localHash === existingHash) {
+      // PIN already known — skip
+      document.getElementById('pin-overlay').style.display = 'none';
+      document.getElementById('app-content').style.display = '';
+      initFirebase();
+    } else {
+      // PIN exists in Firebase but not locally — ask for it
+      showPinScreen(false);
+    }
+  }
+})();
+</script>
+</body>
+</html>
