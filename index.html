@@ -186,6 +186,32 @@
   .done-list { padding: 8px; }
   .done-list.collapsed { display: none; }
 
+  /* Week group in done list */
+  .done-week {
+    margin-bottom: 8px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fafbfc;
+  }
+  .done-week-header {
+    padding: 8px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #666;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    user-select: none;
+    transition: background .15s;
+  }
+  .done-week-header:hover { background: #f0f2f5; }
+  .done-week-header .week-arrow { transition: transform .2s; font-size: 11px; }
+  .done-week-header .week-arrow.collapsed { transform: rotate(-90deg); }
+  .done-week-header .week-count { margin-left: auto; font-size: 11px; color: #bbb; font-weight: 400; }
+  .done-week-items { padding: 4px 8px 8px; }
+  .done-week-items.collapsed { display: none; }
+
   .done-item {
     display: flex;
     align-items: center;
@@ -372,6 +398,8 @@
 
     .done-item { padding: 10px 12px; }
     .done-item .done-cluster { font-size: 10px; padding: 2px 5px; }
+    .done-week-header { padding: 10px 12px; font-size: 12px; }
+    .done-week-items { padding: 4px 6px 8px; }
 
     .modal { padding: 16px; max-width: 100vw; width: 100vw; height: 100vh; max-height: 100vh; border-radius: 0; }
     .modal-body { flex-direction: column; }
@@ -688,7 +716,7 @@ const SEED_TASKS = [
 let tasks = [];
 let currentView = 'all';
 let editingTaskId = null;
-let doneCollapsed = false;
+let doneCollapsed = true; // по умолчанию свёрнуто
 let editingClusterId = null;
 let selectedColor = '';
 
@@ -996,22 +1024,89 @@ function toggleActionsMobile(btn) {
   }
 }
 
+function getWeekKey(dateStr) {
+  if (!dateStr) return 'unknown';
+  const d = new Date(dateStr);
+  // Понедельник — первый день недели
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  const monday = new Date(d);
+  monday.setDate(diff);
+  return monday.toISOString().slice(0, 10);
+}
+
+function formatWeekRange(mondayStr) {
+  const monday = new Date(mondayStr);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const opts = { day: 'numeric', month: 'short' };
+  const m = monday.toLocaleDateString('ru-RU', opts);
+  const s = sunday.toLocaleDateString('ru-RU', opts);
+  const year = sunday.getFullYear();
+  // Если неделя跨越 год
+  if (monday.getFullYear() !== year) {
+    return `${m} — ${s} ${year}`;
+  }
+  return `${m} — ${s}`;
+}
+
 function renderDone() {
   const doneList = document.getElementById('done-list');
   const doneCount = document.getElementById('done-count');
-  const doneTasks = tasks.filter(t => t.done).sort((a, b) => (b.doneAt || '').localeCompare(a.doneAt || ''));
+  const doneTasks = tasks.filter(t => t.done);
   doneCount.textContent = doneTasks.length ? `(${doneTasks.length})` : '';
-  doneList.innerHTML = doneTasks.length === 0
-    ? '<div class="empty-hint">Пока нет завершённых</div>'
-    : doneTasks.map(t => {
-        const ci = getClusterInfo(t.cluster);
-        return `<div class="done-item">
-          <span class="done-cluster" style="background:${ci.color}22;color:${ci.color}">${escHtml(ci.name)}</span>
-          <span class="done-text done">${escHtml(t.text)}</span>
-          <span class="done-date">${formatDate(t.doneAt)}</span>
-          <button class="done-undo" onclick="toggleDone('${t.id}')" title="Вернуть">↩</button>
-        </div>`;
-      }).join('');
+
+  if (doneTasks.length === 0) {
+    doneList.innerHTML = '<div class="empty-hint">Пока нет завершённых</div>';
+    return;
+  }
+
+  // Group by week
+  const weeks = {};
+  doneTasks.forEach(t => {
+    const wk = getWeekKey(t.doneAt);
+    if (!weeks[wk]) weeks[wk] = [];
+    weeks[wk].push(t);
+  });
+
+  // Sort weeks descending (newest first)
+  const sortedWeeks = Object.keys(weeks).sort((a, b) => b.localeCompare(a));
+
+  let html = '';
+  sortedWeeks.forEach(weekKey => {
+    const weekTasks = weeks[weekKey].sort((a, b) => (b.doneAt || '').localeCompare(a.doneAt || ''));
+    const label = weekKey === 'unknown' ? 'Без даты' : formatWeekRange(weekKey);
+
+    html += `<div class="done-week">
+      <div class="done-week-header" onclick="toggleWeek(this)">
+        <span class="week-arrow">▼</span>
+        <span>${escHtml(label)}</span>
+        <span class="week-count">${weekTasks.length}</span>
+      </div>
+      <div class="done-week-items collapsed">
+    `;
+
+    weekTasks.forEach(t => {
+      const ci = getClusterInfo(t.cluster);
+      html += `<div class="done-item">
+        <span class="done-cluster" style="background:${ci.color}22;color:${ci.color}">${escHtml(ci.name)}</span>
+        <span class="done-text done">${escHtml(t.text)}</span>
+        <span class="done-date">${formatDate(t.doneAt)}</span>
+        <button class="done-undo" onclick="toggleDone('${t.id}')" title="Вернуть">↩</button>
+      </div>`;
+    });
+
+    html += `</div></div>`;
+  });
+
+  doneList.innerHTML = html;
+}
+
+function toggleWeek(headerEl) {
+  const items = headerEl.nextElementSibling;
+  const arrow = headerEl.querySelector('.week-arrow');
+  items.classList.toggle('collapsed');
+  arrow.classList.toggle('collapsed');
 }
 
 function toggleDoneCollapse() {
