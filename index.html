@@ -251,6 +251,43 @@
 
   .done-item .done-text { flex: 1; }
   .done-item .done-text.done { text-decoration: line-through; }
+  .done-item-wrap { margin-bottom: 2px; }
+  .done-item-wrap.has-notes .done-item { margin-bottom: 0; }
+  .done-item .done-note-toggle {
+    border: 1px solid #d7e8f8;
+    background: #eef6ff;
+    color: #2980b9;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 3px 7px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    transition: all .15s;
+  }
+  .done-item .done-note-toggle:hover { background: #dfefff; border-color: #bcd8f3; }
+  .done-item .done-note-toggle.active { background: #2980b9; border-color: #2980b9; color: #fff; }
+  .done-notes {
+    display: none;
+    margin: 0 12px 8px 12px;
+    padding: 10px 12px;
+    border-radius: 0 0 6px 6px;
+    background: #f8fbff;
+    border: 1px solid #dbeafe;
+    border-top: none;
+    font-size: 13px;
+    color: #425466;
+    line-height: 1.5;
+  }
+  .done-notes.open { display: block; }
+  .done-notes p:first-child,
+  .done-notes ul:first-child,
+  .done-notes ol:first-child,
+  .done-notes div:first-child { margin-top: 0; }
+  .done-notes p:last-child,
+  .done-notes ul:last-child,
+  .done-notes ol:last-child,
+  .done-notes div:last-child { margin-bottom: 0; }
+  .done-notes ul, .done-notes ol { padding-left: 20px; }
 
   .modal-overlay {
     display: none; position: fixed; inset: 0;
@@ -1100,6 +1137,7 @@ function renderDone() {
   });
 
   doneList.innerHTML = html;
+  enhanceDoneItemsWithNotes();
 }
 
 function toggleWeek(headerEl) {
@@ -1107,6 +1145,55 @@ function toggleWeek(headerEl) {
   const arrow = headerEl.querySelector('.week-arrow');
   items.classList.toggle('collapsed');
   arrow.classList.toggle('collapsed');
+}
+
+function enhanceDoneItemsWithNotes() {
+  const orderedDoneTasks = tasks
+    .filter(t => t.done)
+    .sort((a, b) => {
+      const weekA = getWeekKey(a.doneAt);
+      const weekB = getWeekKey(b.doneAt);
+      if (weekA !== weekB) return weekB.localeCompare(weekA);
+      return (b.doneAt || '').localeCompare(a.doneAt || '');
+    });
+
+  const doneItems = document.querySelectorAll('.done-week .done-item');
+  doneItems.forEach((itemEl, index) => {
+    const task = orderedDoneTasks[index];
+    if (!task || !task.notes) return;
+
+    const textEl = itemEl.querySelector('.done-text');
+    const dateEl = itemEl.querySelector('.done-date');
+    if (!textEl || !dateEl) return;
+
+    const wrapEl = document.createElement('div');
+    wrapEl.className = 'done-item-wrap has-notes';
+    itemEl.parentNode.insertBefore(wrapEl, itemEl);
+    wrapEl.appendChild(itemEl);
+
+    const buttonEl = document.createElement('button');
+    buttonEl.className = 'done-note-toggle';
+    buttonEl.type = 'button';
+    buttonEl.title = 'Показать заметки';
+    buttonEl.textContent = '📝';
+    buttonEl.onclick = () => toggleDoneNotes(buttonEl);
+    itemEl.insertBefore(buttonEl, dateEl);
+
+    const notesEl = document.createElement('div');
+    notesEl.className = 'done-notes';
+    notesEl.innerHTML = task.notes;
+    wrapEl.appendChild(notesEl);
+  });
+}
+
+function toggleDoneNotes(buttonEl) {
+  const wrap = buttonEl.closest('.done-item-wrap');
+  if (!wrap) return;
+  const notesEl = wrap.querySelector('.done-notes');
+  if (!notesEl) return;
+  const isOpen = notesEl.classList.toggle('open');
+  buttonEl.classList.toggle('active', isOpen);
+  buttonEl.title = isOpen ? 'Скрыть заметки' : 'Показать заметки';
 }
 
 function toggleDoneCollapse() {
