@@ -539,6 +539,7 @@
     <label>Цвет</label>
     <div class="color-picker" id="color-picker"></div>
     <div class="btn-row">
+      <button id="cluster-delete-btn" class="btn-danger" onclick="deleteClusterFromModal()" style="margin-right:auto;background:#e74c3c;color:#fff;">🗑 Удалить</button>
       <button class="btn-secondary" onclick="closeClusterModal()">Отмена</button>
       <button class="btn-primary" onclick="saveClusterModal()">Сохранить</button>
     </div>
@@ -872,6 +873,11 @@ function fbUpdateTask(id, updates) { db.ref('tasks/' + id).update(updates); }
 function fbAddTask(task) { db.ref('tasks/' + task.id).set(task); }
 function fbRemoveTask(id) { db.ref('tasks/' + id).remove(); }
 function fbUpdateCluster(id, updates) { db.ref('clusters/' + id).update(updates); }
+function fbRemoveCluster(id) { db.ref('clusters/' + id).remove(); }
+
+function getClusterTaskCount(clusterId) {
+  return tasks.filter(t => t.cluster === clusterId).length;
+}
 
 function renderBoard() {
   const board = document.getElementById('board');
@@ -1290,8 +1296,14 @@ function openClusterModal(id) {
   editingClusterId = id;
   const cluster = (window.CLUSTERS || []).find(c => c.id === id);
   if (!cluster) return;
+  const clusterTaskCount = getClusterTaskCount(id);
   document.getElementById('cluster-name-input').value = cluster.name;
   selectedColor = cluster.color;
+  const deleteBtn = document.getElementById('cluster-delete-btn');
+  deleteBtn.disabled = clusterTaskCount > 0;
+  deleteBtn.title = clusterTaskCount > 0
+    ? `Удаление доступно только для пустой колонки. Сейчас карточек: ${clusterTaskCount}`
+    : 'Удалить пустую колонку';
   renderColorPicker();
   document.getElementById('cluster-modal').classList.add('open');
 }
@@ -1307,6 +1319,21 @@ function renderColorPicker() {
   ).join('');
 }
 function selectColor(c) { selectedColor = c; renderColorPicker(); }
+
+function deleteClusterFromModal() {
+  if (!editingClusterId) return;
+
+  const clusterTaskCount = getClusterTaskCount(editingClusterId);
+  if (clusterTaskCount > 0) {
+    alert(`Колонку можно удалить только если в ней 0 карточек. Сейчас карточек: ${clusterTaskCount}.`);
+    return;
+  }
+
+  if (confirm('Удалить пустую колонку?')) {
+    fbRemoveCluster(editingClusterId);
+    closeClusterModal();
+  }
+}
 
 function exportData() {
   const data = { clusters: window.CLUSTERS || DEFAULT_CLUSTERS, tasks, exportedAt: new Date().toISOString() };
