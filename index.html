@@ -785,11 +785,7 @@ function initFirebase() {
     if (data) {
       let savedClusters = Object.values(data);
       savedClusters.sort((a, b) => (a.order || 0) - (b.order || 0));
-      const savedIds = new Set(savedClusters.map(c => c.id));
       window.CLUSTERS = [...savedClusters];
-      DEFAULT_CLUSTERS.forEach(dc => {
-        if (!savedIds.has(dc.id)) window.CLUSTERS.push({ ...dc });
-      });
     } else {
       window.CLUSTERS = [...DEFAULT_CLUSTERS];
     }
