@@ -875,8 +875,9 @@ function fbRemoveTask(id) { db.ref('tasks/' + id).remove(); }
 function fbUpdateCluster(id, updates) { db.ref('clusters/' + id).update(updates); }
 function fbRemoveCluster(id) { db.ref('clusters/' + id).remove(); }
 
-function getClusterTaskCount(clusterId) {
-  return tasks.filter(t => t.cluster === clusterId).length;
+function getClusterTaskCount(clusterId, options = {}) {
+  const { includeDone = true } = options;
+  return tasks.filter(t => t.cluster === clusterId && (includeDone || !t.done)).length;
 }
 
 function renderBoard() {
@@ -1296,14 +1297,17 @@ function openClusterModal(id) {
   editingClusterId = id;
   const cluster = (window.CLUSTERS || []).find(c => c.id === id);
   if (!cluster) return;
-  const clusterTaskCount = getClusterTaskCount(id);
+  const activeTaskCount = getClusterTaskCount(id, { includeDone: false });
+  const doneTaskCount = getClusterTaskCount(id) - activeTaskCount;
   document.getElementById('cluster-name-input').value = cluster.name;
   selectedColor = cluster.color;
   const deleteBtn = document.getElementById('cluster-delete-btn');
-  deleteBtn.disabled = clusterTaskCount > 0;
-  deleteBtn.title = clusterTaskCount > 0
-    ? `Удаление доступно только для пустой колонки. Сейчас карточек: ${clusterTaskCount}`
-    : 'Удалить пустую колонку';
+  deleteBtn.disabled = activeTaskCount > 0;
+  deleteBtn.title = activeTaskCount > 0
+    ? `Удаление доступно только для колонки без активных карточек. Сейчас активных карточек: ${activeTaskCount}`
+    : doneTaskCount > 0
+      ? `Удалить колонку. У завершённых карточек (${doneTaskCount}) будет снята принадлежность к ней`
+      : 'Удалить пустую колонку';
   renderColorPicker();
   document.getElementById('cluster-modal').classList.add('open');
 }
@@ -1323,13 +1327,28 @@ function selectColor(c) { selectedColor = c; renderColorPicker(); }
 function deleteClusterFromModal() {
   if (!editingClusterId) return;
 
-  const clusterTaskCount = getClusterTaskCount(editingClusterId);
-  if (clusterTaskCount > 0) {
-    alert(`Колонку можно удалить только если в ней 0 карточек. Сейчас карточек: ${clusterTaskCount}.`);
+  const activeTaskCount = getClusterTaskCount(editingClusterId, { includeDone: false });
+  const doneTaskCount = getClusterTaskCount(editingClusterId) - activeTaskCount;
+  if (activeTaskCount > 0) {
+    alert(`Колонку можно удалить только если в ней нет активных карточек. Сейчас активных карточек: ${activeTaskCount}.`);
     return;
   }
 
-  if (confirm('Удалить пустую колонку?')) {
+  const confirmText = doneTaskCount > 0
+    ? `Удалить колонку? У завершённых карточек (${doneTaskCount}) будет снята принадлежность к этой колонке.`
+    : 'Удалить пустую колонку?';
+
+  if (confirm(confirmText)) {
+    const updates = {};
+    tasks
+      .filter(t => t.cluster === editingClusterId && t.done)
+      .forEach(t => {
+        updates['tasks/' + t.id + '/cluster'] = '';
+      });
+
+    if (Object.keys(updates).length > 0) {
+      db.ref().update(updates);
+    }
     fbRemoveCluster(editingClusterId);
     closeClusterModal();
   }
