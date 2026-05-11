@@ -458,6 +458,7 @@
   <button id="btn-waiting" onclick="showView('waiting')">⏳ Ждём</button>
   <button onclick="exportData()">💾 Экспорт JSON</button>
   <button onclick="backupFullHtml()">📦 Полный бэкап (HTML)</button>
+  <button onclick="signOutPlanner()">Выйти</button>
 </div>
 
 <div id="loading" style="text-align:center;padding:40px;color:#999;">
@@ -519,11 +520,11 @@
 </div>
 </div><!-- /app-content -->
 
-<!-- PIN Screen -->
+<!-- Auth Screen -->
 <div class="pin-overlay" id="pin-overlay">
   <div class="pin-box">
-    <div style="font-size:32px;margin-bottom:8px;">🔒</div>
-    <h3 id="pin-title">Задайте PIN</h3>
+    <div style="font-size:32px;margin-bottom:8px;">🔐</div>
+    <h3 id="pin-title">Войдите в планнер</h3>
     <p id="pin-hint" style="font-size:13px;color:#666;margin-bottom:16px;"></p>
     <div class="pin-digits" id="pin-digits"></div>
     <div class="pin-error" id="pin-error"></div>
@@ -547,6 +548,7 @@
 </div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 
 <script>
@@ -561,21 +563,14 @@ const firebaseConfig = {
   appId: "1:739104273815:web:fc99b1ea5672f2352680d2"
 };
 firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
 const db = firebase.database();
 
-// ===== PIN AUTH =====
-const PIN_STORAGE_KEY = 'planner_pin_hash';
-let pinHash = ''; // SHA-256 hash of the PIN, stored in Firebase and localStorage
+// ===== FIREBASE AUTH =====
+const googleProvider = new firebase.auth.GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: 'select_account' });
 
-async function sha256(text) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(text);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-function showPinScreen(setupMode) {
+function showAuthScreen(message = '', isError = false) {
   const overlay = document.getElementById('pin-overlay');
   const title = document.getElementById('pin-title');
   const hint = document.getElementById('pin-hint');
@@ -583,104 +578,39 @@ function showPinScreen(setupMode) {
   const errorEl = document.getElementById('pin-error');
 
   overlay.style.display = 'flex';
-  if (setupMode) {
-    title.textContent = 'Задайте PIN';
-    hint.textContent = '4 цифры — этот PIN понадобится всем, кто откроет планнер';
-  } else {
-    title.textContent = 'Введите PIN';
-    hint.textContent = '';
-  }
-
-  let code = '';
+  title.textContent = 'Войдите в планнер';
+  hint.textContent = message || 'Доступ к данным проверяется Firebase по вашему Google-аккаунту.';
+  errorEl.textContent = isError ? message : '';
   digitsContainer.innerHTML = '';
 
-  for (let i = 0; i < 4; i++) {
-    const inp = document.createElement('input');
-    inp.type = 'text';
-    inp.inputMode = 'numeric';
-    inp.maxLength = 1;
-    inp.className = 'pin-digit';
-    inp.dataset.index = i;
-    inp.autocomplete = i === 0 ? 'one-time-code' : 'off';
-    inp.addEventListener('input', (e) => {
-      const val = e.target.value.replace(/\D/g, '');
-      e.target.value = val;
-      if (val) {
-        code = code.slice(0, i) + val + code.slice(i + 1);
-        e.target.classList.add('filled');
-        const next = digitsContainer.querySelector(`[data-index="${i + 1}"]`);
-        if (next) next.focus();
-        if (code.length === 4) handlePinSubmit(code, setupMode, errorEl, digitsContainer);
-      } else {
-        code = code.slice(0, i) + code.slice(i + 1);
-        e.target.classList.remove('filled');
-      }
-    });
-    inp.addEventListener('keydown', (e) => {
-      if (e.key === 'Backspace' && !e.target.value) {
-        const prev = digitsContainer.querySelector(`[data-index="${i - 1}"]`);
-        if (prev) { prev.focus(); prev.value = ''; prev.classList.remove('filled'); }
-      }
-      if (e.key === 'ArrowLeft') {
-        const prev = digitsContainer.querySelector(`[data-index="${i - 1}"]`);
-        if (prev) prev.focus();
-      }
-      if (e.key === 'ArrowRight') {
-        const next = digitsContainer.querySelector(`[data-index="${i + 1}"]`);
-        if (next) next.focus();
-      }
-    });
-    inp.addEventListener('paste', (e) => {
-      e.preventDefault();
-      const paste = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '').slice(0, 4);
-      if (paste.length === 4) {
-        code = paste;
-        const inputs = digitsContainer.querySelectorAll('.pin-digit');
-        paste.split('').forEach((ch, idx) => {
-          inputs[idx].value = ch;
-          inputs[idx].classList.add('filled');
-        });
-        handlePinSubmit(code, setupMode, errorEl, digitsContainer);
-      }
-    });
-    digitsContainer.appendChild(inp);
-  }
-
-  setTimeout(() => digitsContainer.querySelector('[data-index="0"]').focus(), 100);
+  const signInButton = document.createElement('button');
+  signInButton.type = 'button';
+  signInButton.className = 'btn-primary';
+  signInButton.style.border = 'none';
+  signInButton.style.borderRadius = '8px';
+  signInButton.style.cursor = 'pointer';
+  signInButton.style.padding = '10px 18px';
+  signInButton.textContent = 'Войти через Google';
+  signInButton.onclick = signInWithGoogle;
+  digitsContainer.appendChild(signInButton);
 }
 
-async function handlePinSubmit(code, setupMode, errorEl, digitsContainer) {
-  errorEl.textContent = '';
-
-    if (setupMode) {
-    // Admin setting up PIN: save hash to Firebase and localStorage
-    const hash = await sha256(code);
-    try {
-      await db.ref('config/pinHash').set(hash);
-      localStorage.setItem(PIN_STORAGE_KEY, hash);
-      pinHash = hash;
-      document.getElementById('pin-overlay').style.display = 'none';
-      document.getElementById('app-content').style.display = '';
-      initFirebase();
-    } catch (e) {
-      errorEl.textContent = 'Ошибка сохранения PIN. Проверьте подключение.';
+async function signInWithGoogle() {
+  showAuthScreen('Открываю вход через Google...');
+  try {
+    await auth.signInWithPopup(googleProvider);
+  } catch (e) {
+    if (e && (e.code === 'auth/popup-blocked' || e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request')) {
+      await auth.signInWithRedirect(googleProvider);
+      return;
     }
-  } else {
-    // User entering PIN: check against hash from Firebase
-    const hash = await sha256(code);
-    const expectedHash = pinHash; // loaded from Firebase/localStorage
-    if (hash === expectedHash) {
-      localStorage.setItem(PIN_STORAGE_KEY, hash);
-      document.getElementById('pin-overlay').style.display = 'none';
-      document.getElementById('app-content').style.display = '';
-      initFirebase();
-    } else {
-      errorEl.textContent = 'Неверный PIN';
-      const inputs = digitsContainer.querySelectorAll('.pin-digit');
-      inputs.forEach(inp => { inp.value = ''; inp.classList.remove('filled'); });
-      inputs[0].focus();
-    }
+    console.error('Google sign-in error:', e);
+    showAuthScreen('Ошибка входа: ' + (e.message || e.code || 'не удалось войти'), true);
   }
+}
+
+function signOutPlanner() {
+  auth.signOut().then(() => location.reload());
 }
 
 const COLORS = ['#3498db','#2ecc71','#e74c3c','#f39c12','#9b59b6','#1abc9c','#e67e22','#95a5a6','#34495e','#e84393','#00b894','#6c5ce7'];
@@ -781,7 +711,12 @@ function setStatus(msg, isError) {
 function getClusterInfo(cid) { return (window.CLUSTERS || []).find(c => c.id === cid) || { name: 'Без кластера', color: '#999' }; }
 
 // ===== FIREBASE: init =====
+let firebaseStarted = false;
+
 function initFirebase() {
+  if (firebaseStarted) return;
+  firebaseStarted = true;
+
   let fbReady = false;
 
   setStatus('Подключение к Firebase…');
@@ -1438,30 +1373,22 @@ function reorderClusters(fromId, toId) {
 }
 
 // ===== INIT =====
-(async function init() {
-  // 1. Check if PIN is set in Firebase
-  const snap = await db.ref('config/pinHash').once('value');
-  const existingHash = snap.val();
+auth.getRedirectResult().catch(e => {
+  console.error('Google redirect sign-in error:', e);
+  showAuthScreen('Ошибка входа: ' + (e.message || e.code || 'не удалось войти'), true);
+});
 
-  // 2. Check local storage
-  const localHash = localStorage.getItem(PIN_STORAGE_KEY);
-
-  if (!existingHash) {
-    // No PIN set — admin must create one
-    showPinScreen(true);
-  } else {
-    pinHash = existingHash;
-    if (localHash === existingHash) {
-      // PIN already known — skip
-      document.getElementById('pin-overlay').style.display = 'none';
-      document.getElementById('app-content').style.display = '';
-      initFirebase();
-    } else {
-      // PIN exists in Firebase but not locally — ask for it
-      showPinScreen(false);
-    }
+auth.onAuthStateChanged(user => {
+  if (!user) {
+    document.getElementById('app-content').style.display = 'none';
+    showAuthScreen();
+    return;
   }
-})();
+
+  document.getElementById('pin-overlay').style.display = 'none';
+  document.getElementById('app-content').style.display = '';
+  initFirebase();
+});
 </script>
 </body>
 </html>
